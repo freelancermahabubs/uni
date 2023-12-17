@@ -4,7 +4,6 @@ import config from '../../config';
 import { AcademicSemester } from '../academicSemester/academicSemester.modal';
 import { Student } from '../students/students.Model';
 import { TStudents } from '../students/students.interface';
-
 import { TUser } from './user.interface';
 import { User } from './user.model';
 import { generateAdminId, generateFacultyId, generateStudentId } from './user.utils';
