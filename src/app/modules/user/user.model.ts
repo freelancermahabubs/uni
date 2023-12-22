@@ -1,11 +1,10 @@
 /* eslint-disable @typescript-eslint/no-this-alias */
 import { Schema, model } from 'mongoose';
-import { TUser } from './user.interface';
+import { TUser, UserModel } from './user.interface';
 import config from '../../config';
 import bcrypt from 'bcrypt';
-import AppError from '../../errors/AppError';
-import httpStatus from 'http-status';
-const userSchema = new Schema<TUser>(
+
+const userSchema = new Schema<TUser, UserModel>(
   {
     id: {
       type: String,
@@ -14,10 +13,14 @@ const userSchema = new Schema<TUser>(
     password: {
       type: String,
       required: true,
+      select: 0
     },
     needsPasswrodChange: {
       type: Boolean,
       default: true,
+    },
+    passwordChangedAt: {
+      type: Date,
     },
     role: {
       type: String,
@@ -54,13 +57,24 @@ userSchema.post('save', function (doc, next) {
   next();
 });
 
-userSchema.pre('findOneAndUpdate', async function (next) {
-  const query = this.getQuery();
-  const isStudentExist = await User.findOne(query);
-  if (!isStudentExist) {
-    throw new AppError(httpStatus.NOT_FOUND, 'This User does not exist!');
-  }
-  next();
-});
+userSchema.statics.isUserExistsByCustomId = async function (id: string) {
+  return await User.findOne({ id }).select('+password');
+};
 
-export const User = model<TUser>('User', userSchema);
+userSchema.statics.isPasswordMatched = async function (
+  plainTextPassword,
+  hashedPassword,
+) {
+  return await bcrypt.compare(plainTextPassword, hashedPassword);
+};
+
+userSchema.statics.isJWTIssuedBeforePasswordChanged = function (
+  passwordChangedTimestamp: Date,
+  jwtIssuedTimestamp: number,
+) {
+  const passwordChangedTime =
+    new Date(passwordChangedTimestamp).getTime() / 1000;
+  return passwordChangedTime > jwtIssuedTimestamp;
+};
+
+export const User = model<TUser, UserModel>('User', userSchema);

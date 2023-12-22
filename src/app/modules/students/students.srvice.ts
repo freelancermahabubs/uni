@@ -94,6 +94,7 @@ const getSingleStudentsFromDB = async (id: string) => {
   // Aggregate
 
   const result = await Student.findOne({ id })
+    .populate('user')
     .populate('admissionSemester')
     .populate({
       path: 'academicDepartment',
