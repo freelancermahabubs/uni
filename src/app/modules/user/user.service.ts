@@ -6,14 +6,23 @@ import { Student } from '../students/students.Model';
 import { TStudents } from '../students/students.interface';
 import { TUser } from './user.interface';
 import { User } from './user.model';
-import { generateAdminId, generateFacultyId, generateStudentId } from './user.utils';
+import {
+  generateAdminId,
+  generateFacultyId,
+  generateStudentId,
+} from './user.utils';
 import AppError from '../../errors/AppError';
 import httpStatus from 'http-status';
 import { Admin } from '../Admin/admin.model';
 import { Faculty } from '../Faculty/faculty.model';
 import { TFaculty } from '../Faculty/faculty.interface';
 import { AcademicDepartment } from '../academicDepartment/academicDepartment.model';
-const createStudentIntoDB = async (password: string, payload: TStudents) => {
+import { sendImageToCloudinary } from '../../utils/sendImageToCloudinary';
+const createStudentIntoDB = async (
+  file: any,
+  password: string,
+  payload: TStudents,
+) => {
   //create a user object
 
   const userData: Partial<TUser> = {};
@@ -25,7 +34,7 @@ const createStudentIntoDB = async (password: string, payload: TStudents) => {
   //   set a student  role
 
   userData.role = 'student';
-
+  userData.email = payload.email;
   // find academic semester info
   const admissionSemester = await AcademicSemester.findById(
     payload.admissionSemester,
@@ -42,6 +51,10 @@ const createStudentIntoDB = async (password: string, payload: TStudents) => {
     //set  generated id
     userData.id = await generateStudentId(admissionSemester);
 
+    const imageName = `${userData.id}${payload?.name?.firstName}`;
+    const path = file?.path;
+    //send image to cloudinary
+    const { secure_url } = await sendImageToCloudinary(imageName, path);
     //   crate a user (transaction -1)
     const newUser = await User.create([userData], { session });
 
@@ -53,6 +66,7 @@ const createStudentIntoDB = async (password: string, payload: TStudents) => {
     // set id , _id as user
     payload.id = newUser[0]?.id;
     payload.user = newUser[0]?._id; //reference _id
+    payload.profileImage = secure_url;
     // create a new student (transaciton -2)
     const newStudent = await Student.create([payload], { session });
     if (!newStudent.length) {
@@ -81,6 +95,7 @@ const createFacultyIntoDB = async (password: string, payload: TFaculty) => {
 
   //set student role
   userData.role = 'faculty';
+  userData.email = payload.email;
 
   // find academic department info
   const academicDepartment = await AcademicDepartment.findById(
@@ -137,7 +152,7 @@ const createAdminIntoDB = async (password: string, payload: TFaculty) => {
 
   //set student role
   userData.role = 'admin';
-
+  userData.email = payload.email;
   const session = await mongoose.startSession();
 
   try {
@@ -146,7 +161,7 @@ const createAdminIntoDB = async (password: string, payload: TFaculty) => {
     userData.id = await generateAdminId();
 
     // create a user (transaction-1)
-    const newUser = await User.create([userData], { session }); 
+    const newUser = await User.create([userData], { session });
 
     //create a admin
     if (!newUser.length) {
@@ -174,8 +189,35 @@ const createAdminIntoDB = async (password: string, payload: TFaculty) => {
   }
 };
 
+const getMe = async (userId: string, role: string) => {
+  // const decoded = verifyToken(token, config.jwt_access_secret as string);
+  // const { userId, role } = decoded;
+
+  let result = null;
+  if (role === 'student') {
+    result = await Student.findOne({ id: userId }).populate('user');
+  }
+  if (role === 'admin') {
+    result = await Admin.findOne({ id: userId }).populate('user');
+  }
+
+  if (role === 'faculty') {
+    result = await Faculty.findOne({ id: userId }).populate('user');
+  }
+
+  return result;
+};
+
+const changeStatus = async (id: string, payload: { status: string }) => {
+  const result = await User.findByIdAndUpdate(id, payload, {
+    new: true,
+  });
+  return result;
+};
 export const UserServices = {
   createStudentIntoDB,
   createFacultyIntoDB,
   createAdminIntoDB,
+  getMe,
+  changeStatus,
 };
